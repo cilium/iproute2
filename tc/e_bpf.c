@@ -28,8 +28,9 @@ static void explain(void)
 {
 	fprintf(stderr, "Usage: ... bpf [ import UDS_FILE ] [ run CMD ]\n");
 	fprintf(stderr, "       ... bpf [ debug ]\n");
+	fprintf(stderr, "       ... bpf [ pin PATH ] [ object-file OBJ_FILE ] [ type TYPE ] [ attach_type TYPE ] [ section NAME ] [ verbose ]\n");
 	fprintf(stderr, "       ... bpf [ graft MAP_FILE ] [ key KEY ]\n");
-	fprintf(stderr, "          `... [ object-file OBJ_FILE ] [ type TYPE ] [ section NAME ] [ verbose ]\n");
+	fprintf(stderr, "          `... [ object-file OBJ_FILE ] [ type TYPE ] [ attach_type TYPE ] [ section NAME ] [ verbose ]\n");
 	fprintf(stderr, "          `... [ object-pinned PROG_FILE ]\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "Where UDS_FILE provides the name of a unix domain socket file\n");
@@ -76,6 +77,13 @@ static int parse_bpf(struct exec_util *eu, int argc, char **argv)
 				fprintf(stderr,
 					"No trace pipe, tracefs not mounted?\n");
 			return -1;
+		} else if (matches(*argv, "pin") == 0) {
+			const char *bpf_fs_path;
+
+			NEXT_ARG();
+			bpf_fs_path = *argv;
+			NEXT_ARG();
+			return bpf_pin_prog(bpf_fs_path, argc, argv);
 		} else if (matches(*argv, "graft") == 0) {
 			const char *bpf_map_path;
 			bool has_key = false;

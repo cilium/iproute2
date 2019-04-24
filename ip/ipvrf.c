@@ -255,7 +255,7 @@ static int prog_load(int idx)
 		BPF_EXIT_INSN(),
 	};
 
-	return bpf_prog_load(BPF_PROG_TYPE_CGROUP_SOCK, prog, sizeof(prog),
+	return bpf_prog_load(BPF_PROG_TYPE_CGROUP_SOCK, 0, prog, sizeof(prog),
 			     "GPL", bpf_log_buf, sizeof(bpf_log_buf));
 }
 

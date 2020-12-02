@@ -1304,6 +1304,8 @@ bpf_dump_error(struct bpf_elf_ctx *ctx, const char *format, ...)
 	if (bpf_log_has_data(ctx)) {
 		if (ctx->verbose) {
 			fprintf(stderr, "%s\n", ctx->log);
+
+			memset(ctx->log, 0, ctx->log_size);
 		} else {
 			unsigned int off = 0, len = strlen(ctx->log);
 
@@ -1313,9 +1315,11 @@ bpf_dump_error(struct bpf_elf_ctx *ctx, const char *format, ...)
 					off);
 			}
 			fprintf(stderr, "%s\n", ctx->log + off);
-		}
 
-		memset(ctx->log, 0, ctx->log_size);
+			free(ctx->log);
+			ctx->log = NULL;
+			ctx->log_size = 0;
+		}
 	}
 }
 

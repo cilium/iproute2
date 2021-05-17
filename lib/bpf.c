@@ -1189,7 +1189,8 @@ static int bpf_prog_load_dev(enum bpf_prog_type type,
 			     enum bpf_attach_type attach_type,
 			     const struct bpf_insn *insns, size_t size_insns,
 			     const char *license, __u32 ifindex,
-			     char *log, size_t size_log)
+			     char *log, size_t size_log,
+			     const char *prog_name)
 {
 	union bpf_attr attr = {};
 
@@ -1199,7 +1200,9 @@ static int bpf_prog_load_dev(enum bpf_prog_type type,
 	attr.license = bpf_ptr_to_u64(license);
 	attr.prog_ifindex = ifindex;
 	attr.expected_attach_type = attach_type;
-
+	if (prog_name) {
+		snprintf(attr.prog_name, sizeof(attr.prog_name), "%s", prog_name);
+	}
 	if (size_log > 0) {
 		attr.log_buf = bpf_ptr_to_u64(log);
 		attr.log_size = size_log;
@@ -1216,7 +1219,7 @@ int bpf_prog_load(enum bpf_prog_type type,
 		  char *log, size_t size_log)
 {
 	return bpf_prog_load_dev(type, attach_type, insns, size_insns,
-				 license, 0, log, size_log);
+				 license, 0, log, size_log, NULL);
 }
 
 #ifdef HAVE_ELF
@@ -1227,6 +1230,7 @@ struct bpf_elf_prog {
 	unsigned int		insns_num;
 	size_t			size;
 	const char		*license;
+	int 			sec_inx;
 };
 
 struct bpf_hash_entry {
@@ -1282,12 +1286,14 @@ struct bpf_elf_ctx {
 	struct bpf_hash_entry	*ht[256];
 	char			*log;
 	size_t			log_size;
+	int			str_tab_inx;
 };
 
 struct bpf_elf_sec_data {
 	GElf_Shdr		sec_hdr;
 	Elf_Data		*sec_data;
 	const char		*sec_name;
+	int			sec_inx;
 };
 
 struct bpf_map_data {
@@ -1629,16 +1635,52 @@ static void bpf_prog_report(int fd, const char *section,
 	bpf_dump_error(ctx, "Verifier analysis:\n\n");
 }
 
+/*
+ * try best to get section's prog name. if not return null.
+ */
+static char* get_prog_name(struct bpf_elf_ctx *ctx,
+			   const struct bpf_elf_prog *prog)
+{
+	/* fetch the section prog's function name and pass it to kernel */
+	int i;
+	bool found = false;
+	Elf_Data *symbols = NULL;
+	GElf_Sym sym;
+	int n;
+
+	if (!ctx || !ctx->sym_tab)
+		return NULL;
+
+	symbols = ctx->sym_tab;
+	n = symbols->d_size / sizeof(GElf_Sym);
+	for (i = 0; i < n; i++) {
+		if (!gelf_getsym(symbols, i, &sym))
+			continue;
+		if (sym.st_shndx != prog->sec_inx)
+			continue;
+		if (GELF_ST_TYPE(sym.st_info) != STT_FUNC)
+			continue;
+		found = true;
+		break;
+	}
+	if (found) {
+		return elf_strptr(ctx->elf_fd, ctx->str_tab_inx, sym.st_name);
+	}
+
+	return NULL;
+}
+
 static int bpf_prog_attach(const char *section,
 			   const struct bpf_elf_prog *prog,
 			   struct bpf_elf_ctx *ctx)
 {
 	int tries = 0, fd;
+	char *name = get_prog_name(ctx, prog);
 retry:
 	errno = 0;
 	fd = bpf_prog_load_dev(prog->type, prog->attach_type, prog->insns,
 			       prog->size, prog->license, ctx->ifindex,
-			       ctx->log, ctx->log_size);
+			       ctx->log, ctx->log_size, name);
 	if (fd < 0 || ctx->verbose) {
 		/* The verifier log is pretty chatty, sometimes so chatty
 		 * on larger programs, that we could fail to dump everything
@@ -2019,6 +2061,7 @@ static int bpf_fill_section_data(struct bpf_elf_ctx *ctx, int section,
 
 	data->sec_name = sec_name;
 	data->sec_data = sec_edata;
+	data->sec_inx = section;
 	return 0;
 }
 
@@ -2152,6 +2195,7 @@ static int bpf_fetch_strtab(struct bpf_elf_ctx *ctx, int section,
 {
 	ctx->str_tab = data->sec_data;
 	ctx->sec_done[section] = true;
+	ctx->str_tab_inx = section;
 	return 0;
 }
 
@@ -2488,6 +2532,7 @@ static int bpf_fetch_prog(struct bpf_elf_ctx *ctx, const char *section,
 		prog.size        = data.sec_data->d_size;
 		prog.insns_num   = prog.size / sizeof(struct bpf_insn);
 		prog.insns       = data.sec_data->d_buf;
+		prog.sec_inx	 = data.sec_inx;
 
 		fd = bpf_prog_attach(section, &prog, ctx);
 		if (fd < 0)
@@ -2669,6 +2714,7 @@ static int bpf_fetch_prog_relo(struct bpf_elf_ctx *ctx, const char *section,
 		prog->size = data_insn.sec_data->d_size;
 		prog->insns_num = prog->size / sizeof(struct bpf_insn);
 		prog->insns = malloc(prog->size);
+		prog->sec_inx =  data_insn.sec_inx;
 		if (!prog->insns) {
 			*lderr = true;
 			return -ENOMEM;

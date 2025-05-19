@@ -32,7 +32,7 @@ static const char * const netkit_scrub_strings[] = {
 static void explain(struct link_util *lu, FILE *f)
 {
 	fprintf(f,
-		"Usage: ... %s [ mode MODE ] [ POLICY ] [ scrub SCRUB ] [ peer [ POLICY <options> ] ]\n"
+		"Usage: ... %s [ mode MODE ] [ POLICY ] [ scrub SCRUB ] [ lowerdev <device> <queue_from> <queue_to> ] [ peer [ POLICY <options> ] ]\n"
 		"\n"
 		"MODE: l3 | l2\n"
 		"POLICY: forward | blackhole\n"
@@ -93,6 +93,20 @@ static int netkit_parse_opt(struct link_util *lu, int argc, char **argv,
 				return -1;
 			}
 			addattr32(n, 1024, attr_name, policy);
+		} else if (strcmp(*argv, "lowerdev") == 0) {
+			struct netkit_lowerdev dev = {};
+
+			NEXT_ARG();
+			dev.ifindex = ll_name_to_index(*argv);
+			if (!dev.ifindex)
+				exit(nodev(*argv));
+			NEXT_ARG();
+			if (get_u32(&dev.queue_id_from, *argv, 0))
+				invarg("invalid queue_from", *argv);
+			NEXT_ARG();
+			if (get_u32(&dev.queue_id_to, *argv, 0))
+				invarg("invalid queue_to", *argv);
+			addattr_l(n, 1024, IFLA_NETKIT_LOWERDEV, &dev, sizeof(dev));
 		} else if (strcmp(*argv, "peer") == 0) {
 			if (seen_peer)
 				duparg("peer", *(argv + 1));
@@ -209,6 +223,18 @@ static void netkit_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 
 		print_string(PRINT_ANY, "scrub", "scrub %s ",
 			     netkit_print_scrub(scrub));
+	}
+	if (tb[IFLA_NETKIT_LOWERDEV]) {
+		struct netkit_lowerdev *dev = RTA_DATA(tb[IFLA_NETKIT_LOWERDEV]);
+
+		if (is_json_context()) {
+			//xxx
+		} else {
+			fprintf(f, "lowerdev %s %u %u ",
+				ll_index_to_name(dev->ifindex),
+				dev->queue_id_from,
+				dev->queue_id_to);
+		}
 	}
 	if (tb[IFLA_NETKIT_PEER_SCRUB]) {
 		enum netkit_scrub scrub = rta_getattr_u32(tb[IFLA_NETKIT_PEER_SCRUB]);

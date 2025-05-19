@@ -1305,6 +1305,12 @@ enum netkit_scrub {
 	NETKIT_SCRUB_DEFAULT,
 };
 
+struct netkit_lowerdev {
+	__u32 ifindex;
+	__u32 queue_id_from;
+	__u32 queue_id_to;
+};
+
 enum {
 	IFLA_NETKIT_UNSPEC,
 	IFLA_NETKIT_PEER_INFO,
@@ -1316,6 +1322,7 @@ enum {
 	IFLA_NETKIT_PEER_SCRUB,
 	IFLA_NETKIT_HEADROOM,
 	IFLA_NETKIT_TAILROOM,
+	IFLA_NETKIT_LOWERDEV,
 	__IFLA_NETKIT_MAX,
 };
 #define IFLA_NETKIT_MAX	(__IFLA_NETKIT_MAX - 1)
@@ -1983,5 +1990,20 @@ enum {
 };
 
 #define IFLA_DSA_MAX	(__IFLA_DSA_MAX - 1)
+
+/* OVPN section */
+
+enum ovpn_mode {
+	OVPN_MODE_P2P,
+	OVPN_MODE_MP,
+};
+
+enum {
+	IFLA_OVPN_UNSPEC,
+	IFLA_OVPN_MODE,
+	__IFLA_OVPN_MAX,
+};
+
+#define IFLA_OVPN_MAX	(__IFLA_OVPN_MAX - 1)
 
 #endif /* _LINUX_IF_LINK_H */

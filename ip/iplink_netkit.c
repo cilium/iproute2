@@ -29,6 +29,11 @@ static const char * const netkit_scrub_strings[] = {
 	[NETKIT_SCRUB_DEFAULT]	= "default",
 };
 
+static const char * const netkit_pairing_strings[] = {
+	[NETKIT_DEVICE_PAIR]	= "pair",
+	[NETKIT_DEVICE_SINGLE]	= "single",
+};
+
 static void explain(struct link_util *lu, FILE *f)
 {
 	fprintf(f,
@@ -77,6 +82,8 @@ static int netkit_parse_opt(struct link_util *lu, int argc, char **argv,
 				return -1;
 			}
 			addattr32(n, 1024, IFLA_NETKIT_MODE, mode);
+		} else if (strcmp(*argv, "single") == 0) {
+			addattr32(n, 1024, IFLA_NETKIT_PAIRING, NETKIT_DEVICE_SINGLE);
 		} else if (strcmp(*argv, "forward") == 0 ||
 			   strcmp(*argv, "blackhole") == 0) {
 			int attr_name = seen_peer ?
@@ -176,6 +183,15 @@ static const char *netkit_print_scrub(enum netkit_scrub scrub)
 	return netkit_scrub_strings[scrub] ? : inv;
 }
 
+static const char *netkit_print_pairing(enum netkit_pairing pair)
+{
+	const char *inv = "UNKNOWN";
+
+	if (pair >= ARRAY_SIZE(netkit_pairing_strings))
+		return inv;
+	return netkit_pairing_strings[pair] ? : inv;
+}
+
 static void netkit_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 {
 	if (!tb)
@@ -215,6 +231,12 @@ static void netkit_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 
 		print_string(PRINT_ANY, "peer_scrub", "peer scrub %s ",
 			     netkit_print_scrub(scrub));
+	}
+	if (tb[IFLA_NETKIT_PAIRING]) {
+		enum netkit_pairing pair = rta_getattr_u32(tb[IFLA_NETKIT_PAIRING]);
+
+		print_string(PRINT_ANY, "pairing", "pairing %s ",
+			     netkit_print_pairing(pair));
 	}
 }
 
